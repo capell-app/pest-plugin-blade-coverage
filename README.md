@@ -83,3 +83,29 @@ vendor/bin/pest --blade-coverage --blade-coverage-config=tests/custom-blade-cove
 - Existing uncovered views are allowed only while their content hash matches the baseline.
 - New uncovered views and changed uncovered views fail the run.
 - Parallel Pest runs are supported through JSON shards in the configured cache directory.
+
+## Failure Examples
+
+If a package adds a Blade file but no test renders it:
+
+```text
+Blade view coverage
+  1 covered, 0 baseline-allowed, 1 new uncovered, 0 changed uncovered, 2 total
+  New uncovered Blade views:
+    - packages/blog/resources/views/sidebar.blade.php
+```
+
+This fails the Pest process with exit code `1`.
+
+If a Blade file was already baseline-uncovered and its contents change without adding
+render coverage:
+
+```text
+Blade view coverage
+  0 covered, 0 baseline-allowed, 0 new uncovered, 1 changed uncovered, 1 total
+  Changed uncovered Blade views:
+    - packages/blog/resources/views/sidebar.blade.php
+```
+
+This also fails with exit code `1`. Fix either case by adding a test that renders the
+view through Laravel, or by deleting the Blade file if it is genuinely unused.
