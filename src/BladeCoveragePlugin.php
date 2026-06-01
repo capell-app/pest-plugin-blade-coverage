@@ -7,12 +7,13 @@ namespace Capell\PestBladeCoverage;
 use Pest\Contracts\Plugins\AddsOutput;
 use Pest\Contracts\Plugins\Bootable;
 use Pest\Contracts\Plugins\HandlesArguments;
+use Pest\Contracts\Plugins\Terminable;
 use Pest\Plugins\Concerns\HandleArguments;
 use Pest\Plugins\Parallel;
 use PHPUnit\Event\Facade;
 use Symfony\Component\Console\Output\OutputInterface;
 
-final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArguments
+final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArguments, Terminable
 {
     use HandleArguments;
 
@@ -39,6 +40,8 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
     private bool $updateBaseline = false;
 
     private ?string $configPath = null;
+
+    private bool $workerShardWritten = false;
 
     public function __construct(
         private readonly OutputInterface $output,
@@ -109,7 +112,7 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
         $config = $this->config();
 
         if (Parallel::isWorker()) {
-            $this->shards->write($config->cachePath, $this->recorder->covered());
+            $this->writeWorkerShard($config);
 
             return $exitCode;
         }
@@ -135,6 +138,15 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
         }
 
         return $exitCode === 0 ? 1 : $exitCode;
+    }
+
+    public function terminate(): void
+    {
+        if (! $this->enabled || ! Parallel::isWorker()) {
+            return;
+        }
+
+        $this->writeWorkerShard($this->config());
     }
 
     /**
@@ -168,6 +180,16 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
         $_ENV[$key] = $value;
         $_SERVER[$key] = $value;
         putenv($key.'='.$value);
+    }
+
+    private function writeWorkerShard(BladeCoverageConfig $config): void
+    {
+        if ($this->workerShardWritten) {
+            return;
+        }
+
+        $this->workerShardWritten = true;
+        $this->shards->write($config->cachePath, $this->recorder->covered());
     }
 
     private function config(): BladeCoverageConfig
