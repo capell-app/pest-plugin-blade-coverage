@@ -5,7 +5,10 @@ declare(strict_types=1);
 use Capell\PestBladeCoverage\BladeCoverageConfig;
 use Capell\PestBladeCoverage\BladeCoverageRecorder;
 use Capell\PestBladeCoverage\BladeViewRenderCollector;
+use Illuminate\Container\Container;
+use Illuminate\Events\Dispatcher;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Factory;
 
 beforeEach(function (): void {
     $this->bladeCoverageRoot = bladeCoverageTempRoot();
@@ -30,6 +33,31 @@ function armBladeCoverageCollector(object $testCase): BladeCoverageRecorder
     (new BladeViewRenderCollector($recorder))->arm($config);
 
     return $recorder;
+}
+
+function bladeCoverageWildcardComposerCount(Factory $factory): int
+{
+    $events = new ReflectionProperty($factory, 'events');
+    $dispatcher = $events->getValue($factory);
+
+    expect($dispatcher)->toBeInstanceOf(Dispatcher::class);
+
+    $wildcards = new ReflectionProperty($dispatcher, 'wildcards');
+    $listeners = $wildcards->getValue($dispatcher);
+
+    expect($listeners)->toBeArray();
+
+    return count($listeners['composing: *'] ?? []);
+}
+
+function bladeCoverageAfterResolvingViewCallbackCount(Container $container): int
+{
+    $callbacks = new ReflectionProperty($container, 'afterResolvingCallbacks');
+    $callbacksByType = $callbacks->getValue($container);
+
+    expect($callbacksByType)->toBeArray();
+
+    return count($callbacksByType['view'] ?? []);
 }
 
 it('records rendered parent and included partial blade views', function (): void {
@@ -82,4 +110,54 @@ it('does not record blade files that are only read as source', function (): void
 
     expect(file_get_contents($path))->toContain('Source only')
         ->and($recorder->covered())->toBe([]);
+});
+
+it('registers one wildcard view composer when armed repeatedly for the same view factory', function (): void {
+    file_put_contents($this->bladeCoverageViews.'/repeat.blade.php', '<h1>Repeat</h1>');
+
+    $config = BladeCoverageConfig::fromArray([
+        'include' => ['packages/*/resources/views/**/*.blade.php'],
+    ], $this->bladeCoverageRoot);
+
+    $recorder = new BladeCoverageRecorder;
+    $collector = new BladeViewRenderCollector($recorder);
+    $factory = view();
+
+    expect($factory)->toBeInstanceOf(Factory::class);
+
+    $initialComposerCount = bladeCoverageWildcardComposerCount($factory);
+
+    foreach (range(1, 100) as $iteration) {
+        $collector->arm($config);
+    }
+
+    view('blade-coverage-test::repeat')->render();
+
+    expect(bladeCoverageWildcardComposerCount($factory))->toBe($initialComposerCount + 1)
+        ->and($recorder->covered())->toBe([
+            'packages/example/resources/views/repeat.blade.php',
+        ]);
+});
+
+it('registers one after resolving callback when armed repeatedly before the view factory is bound', function (): void {
+    $container = new Container;
+    $previousContainer = Container::getInstance();
+
+    try {
+        Container::setInstance($container);
+
+        $config = BladeCoverageConfig::fromArray([
+            'include' => ['packages/*/resources/views/**/*.blade.php'],
+        ], $this->bladeCoverageRoot);
+
+        $collector = new BladeViewRenderCollector(new BladeCoverageRecorder);
+
+        foreach (range(1, 100) as $iteration) {
+            $collector->arm($config);
+        }
+
+        expect(bladeCoverageAfterResolvingViewCallbackCount($container))->toBe(1);
+    } finally {
+        Container::setInstance($previousContainer);
+    }
 });

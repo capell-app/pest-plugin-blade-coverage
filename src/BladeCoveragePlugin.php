@@ -43,6 +43,8 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
 
     private bool $workerShardWritten = false;
 
+    private ?BladeCoverageConfig $cachedConfig = null;
+
     public function __construct(
         private readonly OutputInterface $output,
         private readonly BladeCoverageConfigLoader $configLoader = new BladeCoverageConfigLoader,
@@ -194,7 +196,7 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
 
     private function config(): BladeCoverageConfig
     {
-        return $this->configLoader->load($this->configPath);
+        return $this->cachedConfig ??= $this->configLoader->load($this->configPath);
     }
 
     /**
