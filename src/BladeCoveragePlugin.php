@@ -24,6 +24,10 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
 
     private const string ENV_ENABLED = 'PEST_BLADE_COVERAGE';
 
+    private const string ENV_UPDATE_BASELINE = 'PEST_BLADE_COVERAGE_UPDATE_BASELINE';
+
+    private const string ENV_CONFIG = 'PEST_BLADE_COVERAGE_CONFIG';
+
     private const string GLOBAL_ENABLED = 'BLADE_COVERAGE_ENABLED';
 
     private const string GLOBAL_UPDATE_BASELINE = 'BLADE_COVERAGE_UPDATE_BASELINE';
@@ -84,9 +88,12 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
         if ($this->enabled && Parallel::isEnabled() && ! Parallel::isWorker()) {
             Parallel::setGlobal(self::GLOBAL_ENABLED, true);
             Parallel::setGlobal(self::GLOBAL_UPDATE_BASELINE, $this->updateBaseline);
+            $this->setWorkerEnvironment(self::ENV_ENABLED, '1');
+            $this->setWorkerEnvironment(self::ENV_UPDATE_BASELINE, $this->updateBaseline ? '1' : '0');
 
             if ($this->configPath !== null) {
                 Parallel::setGlobal(self::GLOBAL_CONFIG, $this->configPath);
+                $this->setWorkerEnvironment(self::ENV_CONFIG, $this->configPath);
             }
         }
 
@@ -145,11 +152,22 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
         $this->configPath = $this->optionValue(self::CONFIG_OPTION, $arguments);
 
         if (Parallel::isWorker()) {
-            $this->updateBaseline = Parallel::getGlobal(self::GLOBAL_UPDATE_BASELINE) === true;
+            $this->updateBaseline = Parallel::getGlobal(self::GLOBAL_UPDATE_BASELINE) === true
+                || filter_var(getenv(self::ENV_UPDATE_BASELINE), FILTER_VALIDATE_BOOL);
 
             $globalConfigPath = Parallel::getGlobal(self::GLOBAL_CONFIG);
-            $this->configPath = is_string($globalConfigPath) ? $globalConfigPath : $this->configPath;
+            $environmentConfigPath = getenv(self::ENV_CONFIG);
+            $this->configPath = is_string($globalConfigPath)
+                ? $globalConfigPath
+                : (is_string($environmentConfigPath) && $environmentConfigPath !== '' ? $environmentConfigPath : $this->configPath);
         }
+    }
+
+    private function setWorkerEnvironment(string $key, string $value): void
+    {
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+        putenv($key.'='.$value);
     }
 
     private function config(): BladeCoverageConfig
