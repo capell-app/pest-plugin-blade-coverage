@@ -26,11 +26,26 @@ final readonly class BladeViewRenderCollector
         }
 
         if (! $app->bound('view')) {
+            if (method_exists($app, 'afterResolving')) {
+                $app->afterResolving('view', function (object $factory) use ($config): void {
+                    $this->registerComposer($factory, $config);
+                });
+            }
+
             return;
         }
 
         $factory = $app->make('view');
 
+        if (! is_object($factory)) {
+            return;
+        }
+
+        $this->registerComposer($factory, $config);
+    }
+
+    private function registerComposer(object $factory, BladeCoverageConfig $config): void
+    {
         if (! is_object($factory) || ! method_exists($factory, 'composer')) {
             return;
         }
