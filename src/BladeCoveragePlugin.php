@@ -9,6 +9,7 @@ use Pest\Contracts\Plugins\Bootable;
 use Pest\Contracts\Plugins\HandlesArguments;
 use Pest\Plugins\Concerns\HandleArguments;
 use Pest\Plugins\Parallel;
+use PHPUnit\Event\Facade;
 use Symfony\Component\Console\Output\OutputInterface;
 
 final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArguments
@@ -50,13 +51,22 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
         $plugin = $this;
         $collector = new BladeViewRenderCollector($this->recorder);
 
-        beforeEach(function () use ($collector, $plugin): void {
-            if (! $plugin->enabled) {
-                return;
-            }
+        Facade::instance()->registerSubscriber(
+            new BladeCoverageBeforeTestMethodSubscriber($this, $collector),
+        );
 
-            $collector->arm($plugin->config());
+        beforeEach(function () use ($collector, $plugin): void {
+            $plugin->armCollector($collector);
         });
+    }
+
+    public function armCollector(BladeViewRenderCollector $collector): void
+    {
+        if (! $this->enabled) {
+            return;
+        }
+
+        $collector->arm($this->config());
     }
 
     /**

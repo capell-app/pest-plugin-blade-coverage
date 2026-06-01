@@ -6,8 +6,6 @@ namespace Capell\PestBladeCoverage;
 
 final readonly class BladeViewRenderCollector
 {
-    private const string MARKER = 'pest.blade-coverage.render-collector-armed';
-
     public function __construct(
         private BladeCoverageRecorder $recorder,
     ) {}
@@ -23,15 +21,13 @@ final readonly class BladeViewRenderCollector
         /** @var object $app */
         $app = $containerClass::getInstance();
 
-        if (! method_exists($app, 'bound') || ! method_exists($app, 'make') || ! method_exists($app, 'instance')) {
+        if (! method_exists($app, 'bound') || ! method_exists($app, 'make')) {
             return;
         }
 
-        if ($app->bound(self::MARKER) || ! $app->bound('view')) {
+        if (! $app->bound('view')) {
             return;
         }
-
-        $app->instance(self::MARKER, true);
 
         $factory = $app->make('view');
 
