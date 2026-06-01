@@ -69,10 +69,24 @@ Create or refresh the baseline:
 vendor/bin/pest --blade-coverage --blade-coverage-update-baseline --configuration=phpunit.xml
 ```
 
+The baseline update command refuses to write a baseline when target views exist but no
+views were rendered. This usually means the selected tests did not exercise Blade output.
+If that is intentional, use the explicit override:
+
+```bash
+vendor/bin/pest --blade-coverage --blade-coverage-update-baseline --blade-coverage-allow-empty-baseline --configuration=phpunit.xml
+```
+
 Use a custom config path:
 
 ```bash
 vendor/bin/pest --blade-coverage --blade-coverage-config=tests/custom-blade-coverage.php
+```
+
+Write a machine-readable report for CI summaries or annotations:
+
+```bash
+vendor/bin/pest --blade-coverage --blade-coverage-json=coverage/blade-coverage.json --configuration=phpunit.xml
 ```
 
 ## Coverage Rules
@@ -92,7 +106,8 @@ If a package adds a Blade file but no test renders it:
 Blade view coverage
   1 covered, 0 baseline-allowed, 1 new uncovered, 0 changed uncovered, 2 total
   New uncovered Blade views:
-    - packages/blog/resources/views/sidebar.blade.php
+    blog:
+      - packages/blog/resources/views/sidebar.blade.php
 ```
 
 This fails the Pest process with exit code `1`.
@@ -104,8 +119,62 @@ render coverage:
 Blade view coverage
   0 covered, 0 baseline-allowed, 0 new uncovered, 1 changed uncovered, 1 total
   Changed uncovered Blade views:
-    - packages/blog/resources/views/sidebar.blade.php
+    blog:
+      - packages/blog/resources/views/sidebar.blade.php
 ```
 
 This also fails with exit code `1`. Fix either case by adding a test that renders the
 view through Laravel, or by deleting the Blade file if it is genuinely unused.
+
+## Baseline Format
+
+The baseline stores uncovered views by normalized path and content hash. It also stores
+metadata that helps catch accidental config drift:
+
+```json
+{
+    "schemaVersion": 1,
+    "generatedAt": "2026-06-01T17:00:00+00:00",
+    "summary": {
+        "total": 174,
+        "covered": 22,
+        "uncovered": 152,
+        "baselineAllowed": 152,
+        "newUncovered": 0,
+        "changedUncovered": 0
+    },
+    "config": {
+        "include": ["packages/*/resources/views/**/*.blade.php"],
+        "exclude": [],
+        "hash": "..."
+    },
+    "views": {
+        "packages/admin/resources/views/example.blade.php": "..."
+    }
+}
+```
+
+Older baselines that contain only a path-to-hash object are still supported.
+
+## Publishing To Packagist
+
+This package is ready for normal Composer distribution once the GitHub repository is
+public and tagged.
+
+1. Log in to [Packagist](https://packagist.org/).
+2. Open [Submit Package](https://packagist.org/packages/submit).
+3. Enter the public repository URL:
+
+```text
+https://github.com/capell-app/pest-plugin-blade-coverage
+```
+
+4. Submit the package. Packagist reads the package name from `composer.json`.
+5. Enable the GitHub/Packagist hook when prompted so new tags update immediately.
+
+After Packagist accepts it, consumers can remove the Composer `repositories` VCS entry
+and install the package normally:
+
+```bash
+composer require --dev capell-app/pest-plugin-blade-coverage:^0.1
+```

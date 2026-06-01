@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use Capell\PestBladeCoverage\BladeCoverageBaseline;
+use Capell\PestBladeCoverage\BladeCoverageBaselineUpdateGuard;
 use Capell\PestBladeCoverage\BladeCoverageConfig;
 use Capell\PestBladeCoverage\BladeCoverageEvaluator;
+use Capell\PestBladeCoverage\BladeCoverageJsonReport;
 use Capell\PestBladeCoverage\BladeCoverageShardStore;
 use Capell\PestBladeCoverage\BladeViewTarget;
 use Capell\PestBladeCoverage\BladeViewTargetFinder;
@@ -83,9 +85,87 @@ it('writes and reads a sorted baseline', function (): void {
         ]);
 
         $baseline = (new BladeCoverageBaseline)->load($path);
+        $decoded = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
 
         expect(array_keys($baseline))->toBe(['a.blade.php', 'z.blade.php'])
-            ->and($baseline['a.blade.php'])->toBe('a-hash');
+            ->and($baseline['a.blade.php'])->toBe('a-hash')
+            ->and($decoded['schemaVersion'])->toBe(1)
+            ->and($decoded['generatedAt'])->toBeString();
+    } finally {
+        bladeCoverageDeleteDirectory($root);
+    }
+});
+
+it('writes baseline summary and config metadata', function (): void {
+    $root = bladeCoverageTempRoot();
+
+    try {
+        $path = $root.'/tests/BladeCoverage/baseline.json';
+        $config = BladeCoverageConfig::fromArray([
+            'include' => ['packages/*/resources/views/**/*.blade.php'],
+            'exclude' => ['packages/demo/resources/views/ignored.blade.php'],
+        ], $root);
+        $targets = [
+            'covered.blade.php' => new BladeViewTarget('covered.blade.php', 'covered-hash'),
+            'uncovered.blade.php' => new BladeViewTarget('uncovered.blade.php', 'uncovered-hash'),
+        ];
+        $result = (new BladeCoverageEvaluator)->evaluate($targets, ['covered.blade.php'], []);
+
+        (new BladeCoverageBaseline)->write($path, $result->uncovered, $result, $config);
+
+        $decoded = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+
+        expect($decoded['summary'])->toMatchArray([
+            'total' => 2,
+            'covered' => 1,
+            'uncovered' => 1,
+        ])
+            ->and($decoded['config']['include'])->toBe(['packages/*/resources/views/**/*.blade.php'])
+            ->and($decoded['config']['exclude'])->toBe(['packages/demo/resources/views/ignored.blade.php'])
+            ->and($decoded['config']['hash'])->toBeString();
+    } finally {
+        bladeCoverageDeleteDirectory($root);
+    }
+});
+
+it('blocks suspicious empty baseline updates unless explicitly allowed', function (): void {
+    $result = (new BladeCoverageEvaluator)->evaluate([
+        'packages/blog/resources/views/index.blade.php' => new BladeViewTarget(
+            'packages/blog/resources/views/index.blade.php',
+            'hash',
+        ),
+    ], [], []);
+
+    $guard = new BladeCoverageBaselineUpdateGuard;
+
+    expect($guard->blocks($result, allowEmptyBaseline: false))->toBeTrue()
+        ->and($guard->blocks($result, allowEmptyBaseline: true))->toBeFalse()
+        ->and($guard->message())->toContain('--blade-coverage-allow-empty-baseline');
+});
+
+it('writes a machine readable json report', function (): void {
+    $root = bladeCoverageTempRoot();
+
+    try {
+        $path = $root.'/coverage/blade.json';
+        $targets = [
+            'covered.blade.php' => new BladeViewTarget('covered.blade.php', 'covered-hash'),
+            'new.blade.php' => new BladeViewTarget('new.blade.php', 'new-hash'),
+        ];
+        $result = (new BladeCoverageEvaluator)->evaluate($targets, ['covered.blade.php'], []);
+
+        (new BladeCoverageJsonReport)->write($path, $result, baselineUpdated: false, baselinePath: $root.'/baseline.json');
+
+        $decoded = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+
+        expect($decoded['summary'])->toMatchArray([
+            'total' => 2,
+            'covered' => 1,
+            'newUncovered' => 1,
+            'failed' => true,
+        ])
+            ->and($decoded['views']['covered'])->toBe(['covered.blade.php'])
+            ->and($decoded['views']['newUncovered'])->toBe(['new.blade.php']);
     } finally {
         bladeCoverageDeleteDirectory($root);
     }

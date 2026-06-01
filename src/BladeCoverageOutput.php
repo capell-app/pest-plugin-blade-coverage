@@ -35,6 +35,16 @@ final readonly class BladeCoverageOutput
         $this->renderFailures('Changed uncovered Blade views', $result->changedUncovered);
     }
 
+    public function renderError(string $message): void
+    {
+        $this->output->writeln(sprintf('  <fg=red>%s</>', $message));
+    }
+
+    public function renderJsonReport(string $path): void
+    {
+        $this->output->writeln(sprintf('  JSON report: %s', $path));
+    }
+
     /**
      * @param  array<string, BladeViewTarget>  $targets
      */
@@ -46,12 +56,46 @@ final readonly class BladeCoverageOutput
 
         $this->output->writeln(sprintf('  <fg=red>%s:</>', $label));
 
-        foreach (array_slice(array_keys($targets), 0, 25) as $path) {
-            $this->output->writeln(sprintf('    - %s', $path));
+        $rendered = 0;
+
+        foreach ($this->groupTargetsByPackage($targets) as $package => $paths) {
+            $this->output->writeln(sprintf('    %s:', $package));
+
+            foreach ($paths as $path) {
+                if ($rendered >= 25) {
+                    break 2;
+                }
+
+                $this->output->writeln(sprintf('      - %s', $path));
+                $rendered++;
+            }
         }
 
-        if (count($targets) > 25) {
-            $this->output->writeln(sprintf('    ... and %d more', count($targets) - 25));
+        if (count($targets) > $rendered) {
+            $this->output->writeln(sprintf('    ... and %d more', count($targets) - $rendered));
         }
+    }
+
+    /**
+     * @param  array<string, BladeViewTarget>  $targets
+     * @return array<string, list<string>>
+     */
+    private function groupTargetsByPackage(array $targets): array
+    {
+        $groups = [];
+
+        foreach (array_keys($targets) as $path) {
+            $segments = explode('/', $path);
+            $package = count($segments) >= 2 && $segments[0] === 'packages'
+                ? $segments[1]
+                : 'other';
+
+            $groups[$package] ??= [];
+            $groups[$package][] = $path;
+        }
+
+        ksort($groups);
+
+        return $groups;
     }
 }

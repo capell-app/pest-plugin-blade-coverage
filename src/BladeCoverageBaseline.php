@@ -54,7 +54,7 @@ final class BladeCoverageBaseline
     /**
      * @param  array<string, BladeViewTarget>  $uncoveredTargets
      */
-    public function write(string $path, array $uncoveredTargets): void
+    public function write(string $path, array $uncoveredTargets, ?BladeCoverageResult $result = null, ?BladeCoverageConfig $config = null): void
     {
         $views = [];
 
@@ -70,11 +70,38 @@ final class BladeCoverageBaseline
             throw new RuntimeException(sprintf('Unable to create Blade coverage baseline directory [%s].', $directory));
         }
 
-        $json = json_encode([
+        $payload = [
+            'schemaVersion' => 1,
             'generatedAt' => gmdate('c'),
             'views' => $views,
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        ];
 
-        file_put_contents($path, $json.PHP_EOL);
+        if ($result instanceof BladeCoverageResult) {
+            $payload['summary'] = [
+                'total' => count($result->targets),
+                'covered' => count($result->covered),
+                'uncovered' => count($result->uncovered),
+                'baselineAllowed' => count($result->baselineAllowed),
+                'newUncovered' => count($result->newUncovered),
+                'changedUncovered' => count($result->changedUncovered),
+            ];
+        }
+
+        if ($config instanceof BladeCoverageConfig) {
+            $payload['config'] = [
+                'include' => $config->include,
+                'exclude' => $config->exclude,
+                'hash' => hash('sha256', json_encode([
+                    'include' => $config->include,
+                    'exclude' => $config->exclude,
+                ], JSON_THROW_ON_ERROR)),
+            ];
+        }
+
+        $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+
+        if (file_put_contents($path, $json.PHP_EOL) === false) {
+            throw new RuntimeException(sprintf('Unable to write Blade coverage baseline [%s].', $path));
+        }
     }
 }

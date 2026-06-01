@@ -42,6 +42,7 @@ it('shows how a new Blade file fails when no test renders it', function (): void
         ->and(renderBladeCoverageFailureExample($result))->toContain(
             '1 covered, 0 baseline-allowed, 1 new uncovered, 0 changed uncovered, 2 total',
             'New uncovered Blade views:',
+            'blog:',
             'packages/blog/resources/views/sidebar.blade.php',
         );
 });
@@ -69,6 +70,7 @@ it('shows how a baseline-uncovered Blade file fails after its contents change', 
         ->and(renderBladeCoverageFailureExample($result))->toContain(
             '0 covered, 0 baseline-allowed, 0 new uncovered, 1 changed uncovered, 1 total',
             'Changed uncovered Blade views:',
+            'blog:',
             'packages/blog/resources/views/sidebar.blade.php',
         );
 });
