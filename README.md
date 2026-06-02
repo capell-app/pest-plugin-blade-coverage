@@ -2,10 +2,13 @@
 
 Pest plugin for checking that Laravel Blade views are rendered by your test suite.
 
-It is built for package-heavy Laravel applications where normal PHP coverage excludes
-`resources/views/**/*.blade.php`. The plugin records views that Laravel actually renders,
-then compares uncovered views against a committed hash baseline so CI only fails for new
-or changed uncovered Blade files.
+Normal PHP coverage never reports `resources/views/**/*.blade.php`, because Blade compiles
+to PHP elsewhere before it runs. This plugin fills that gap: it records the views Laravel
+actually renders during your tests, then compares uncovered views against a committed hash
+baseline so CI only fails for new or changed uncovered Blade files.
+
+It works out of the box on a standard Laravel application (`resources/views`), and a single
+`include` entry extends it to package-per-directory monorepos.
 
 ## Install
 
@@ -28,9 +31,8 @@ If the package is not available through Packagist yet, add a VCS repository firs
 
 ## Configure
 
-Configuration is optional. With no `tests/blade-coverage.php` the plugin scans both
-`resources/views/**/*.blade.php` and `packages/*/resources/views/**/*.blade.php`, so it
-works out of the box on a standard application or a package-per-directory monorepo.
+Configuration is optional. With no `tests/blade-coverage.php` the plugin scans
+`resources/views/**/*.blade.php`, so it works out of the box on a standard Laravel app.
 
 To customise, create `tests/blade-coverage.php`:
 
@@ -42,7 +44,6 @@ declare(strict_types=1);
 return [
     'include' => [
         'resources/views/**/*.blade.php',
-        'packages/*/resources/views/**/*.blade.php',
     ],
     'exclude' => [],
     'baseline' => 'tests/BladeCoverage/baseline.json',
@@ -59,6 +60,18 @@ return [
     // Optionally fail when the covered percentage drops below this threshold.
     'min_coverage' => null,
 ];
+```
+
+### Monorepos
+
+For a package-per-directory monorepo, add the package views to `include` (the `auto`
+grouping then labels failures by package name):
+
+```php
+'include' => [
+    'resources/views/**/*.blade.php',
+    'packages/*/resources/views/**/*.blade.php',
+],
 ```
 
 Add a Composer script:
@@ -153,23 +166,23 @@ suite-wide run:
 ```php
 use Capell\PestBladeCoverage\BladeCoverage;
 
-$rendered = BladeCoverage::capture(fn () => view('blog::index')->render());
-// ['packages/blog/resources/views/index.blade.php']
+$rendered = BladeCoverage::capture(fn () => view('dashboard')->render());
+// ['resources/views/dashboard.blade.php']
 
-expect(BladeCoverage::rendered('packages/blog/resources/views/index.blade.php',
-    fn () => $this->get('/blog')))->toBeTrue();
+expect(BladeCoverage::rendered('resources/views/dashboard.blade.php',
+    fn () => $this->get('/dashboard')))->toBeTrue();
 ```
 
 ## Failure Examples
 
-If a package adds a Blade file but no test renders it:
+If you add a Blade file but no test renders it:
 
 ```text
 Blade view coverage
-  1 covered, 0 baseline-allowed, 1 new uncovered, 0 changed uncovered, 2 total
+  1 covered, 0 baseline-allowed, 1 new uncovered, 0 changed uncovered, 2 total (50.0% covered)
   New uncovered Blade views:
-    blog:
-      - packages/blog/resources/views/sidebar.blade.php
+    resources/views:
+      - resources/views/sidebar.blade.php
 ```
 
 This fails the Pest process with exit code `1`.
@@ -179,10 +192,10 @@ render coverage:
 
 ```text
 Blade view coverage
-  0 covered, 0 baseline-allowed, 0 new uncovered, 1 changed uncovered, 1 total
+  0 covered, 0 baseline-allowed, 0 new uncovered, 1 changed uncovered, 1 total (0.0% covered)
   Changed uncovered Blade views:
-    blog:
-      - packages/blog/resources/views/sidebar.blade.php
+    resources/views:
+      - resources/views/sidebar.blade.php
 ```
 
 This also fails with exit code `1`. Fix either case by adding a test that renders the

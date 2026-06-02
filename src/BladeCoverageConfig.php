@@ -7,15 +7,14 @@ namespace Capell\PestBladeCoverage;
 final readonly class BladeCoverageConfig
 {
     /**
-     * Default include patterns. Covers both the standard application view
-     * directory and the package-per-directory monorepo layout so the plugin is
-     * useful with zero configuration on either project shape.
+     * Default include patterns. Targets the standard Laravel application view
+     * directory so the plugin works with zero configuration on a normal app.
+     * Monorepos can add their package view globs via the `include` config.
      *
      * @var list<string>
      */
     public const array DEFAULT_INCLUDE = [
         'resources/views/**/*.blade.php',
-        'packages/*/resources/views/**/*.blade.php',
     ];
 
     public const string MODE_BASELINE = 'baseline';
