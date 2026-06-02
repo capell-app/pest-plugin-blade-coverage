@@ -10,6 +10,12 @@ use SplFileInfo;
 
 final readonly class BladeViewTargetFinder
 {
+    /**
+     * Views containing this marker (typically inside a Blade comment such as
+     * `{{-- blade-coverage:ignore --}}`) are excluded from coverage targets.
+     */
+    public const string IGNORE_MARKER = 'blade-coverage:ignore';
+
     public function __construct(
         private GlobMatcher $matcher = new GlobMatcher,
     ) {}
@@ -47,13 +53,13 @@ final readonly class BladeViewTargetFinder
                     continue;
                 }
 
-                $hash = hash_file('sha256', $absolutePath);
+                $contents = file_get_contents($absolutePath);
 
-                if (! is_string($hash)) {
+                if ($contents === false || str_contains($contents, self::IGNORE_MARKER)) {
                     continue;
                 }
 
-                $targets[$relativePath] = new BladeViewTarget($relativePath, $hash);
+                $targets[$relativePath] = new BladeViewTarget($relativePath, hash('sha256', $contents));
             }
         }
 

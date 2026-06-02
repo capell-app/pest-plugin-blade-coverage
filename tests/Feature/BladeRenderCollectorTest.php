@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Capell\PestBladeCoverage\BladeCoverage;
 use Capell\PestBladeCoverage\BladeCoverageConfig;
 use Capell\PestBladeCoverage\BladeCoverageRecorder;
 use Capell\PestBladeCoverage\BladeViewRenderCollector;
@@ -106,6 +107,24 @@ it('records blade views rendered through HTTP responses', function (): void {
     expect($recorder->covered())->toBe([
         'packages/example/resources/views/http.blade.php',
     ]);
+});
+
+it('captures rendered views programmatically through the BladeCoverage helper', function (): void {
+    file_put_contents($this->bladeCoverageViews.'/programmatic.blade.php', '<h1>Programmatic</h1>');
+
+    $config = BladeCoverageConfig::fromArray([
+        'include' => ['packages/*/resources/views/**/*.blade.php'],
+    ], $this->bladeCoverageRoot);
+
+    $rendered = BladeCoverage::capture(function (): void {
+        view('blade-coverage-test::programmatic')->render();
+    }, $config);
+
+    expect($rendered)->toBe(['packages/example/resources/views/programmatic.blade.php'])
+        ->and(BladeCoverage::rendered('packages/example/resources/views/programmatic.blade.php', function (): void {
+            view('blade-coverage-test::programmatic')->render();
+        }, $config))->toBeTrue()
+        ->and(BladeCoverage::rendered('packages/example/resources/views/missing.blade.php', fn () => null, $config))->toBeFalse();
 });
 
 it('does not record blade files that are only read as source', function (): void {

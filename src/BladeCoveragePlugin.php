@@ -150,16 +150,17 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
             : $this->recorder->covered();
 
         $targets = $this->targetFinder->find($config);
-        $baseline = $this->baseline->load($config->baselinePath);
+        $strict = $config->mode === BladeCoverageConfig::MODE_STRICT;
+        $baseline = $strict ? [] : $this->baseline->load($config->baselinePath);
         $result = $this->evaluator->evaluate($targets, $covered, $baseline);
         $baselineUpdated = false;
-        $output = new BladeCoverageOutput($this->output);
+        $output = new BladeCoverageOutput($this->output, $config->groupBy);
 
         if ($this->updateBaseline) {
             if ($this->baselineGuard->blocks($result, $this->allowEmptyBaseline)) {
                 $output->render($result, false, $config->baselinePath);
                 $output->renderError($this->baselineGuard->message());
-                $this->writeJsonReport($result, false, $config->baselinePath, $output);
+                $this->writeJsonReport($result, false, $config->baselinePath, $output, $result->failed());
 
                 return $exitCode === 0 ? 1 : $exitCode;
             }
@@ -170,16 +171,35 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
 
         $output->render($result, $baselineUpdated, $config->baselinePath);
 
-        if (! $baselineUpdated && $this->baselineConfigDrifted($config)) {
-            $output->renderWarning(sprintf(
-                'Blade coverage config changed since the baseline was generated. Re-run with %s to refresh it.',
-                self::UPDATE_BASELINE_OPTION,
-            ));
+        $failed = $result->failed();
+
+        if (! $baselineUpdated) {
+            if (! $strict && $this->baselineConfigDrifted($config)) {
+                $output->renderWarning(sprintf(
+                    'Blade coverage config changed since the baseline was generated. Re-run with %s to refresh it.',
+                    self::UPDATE_BASELINE_OPTION,
+                ));
+            }
+
+            if ($config->minCoverage !== null && $result->coveragePercentage() < $config->minCoverage) {
+                $output->renderError(sprintf(
+                    'Coverage %.1f%% is below the required minimum of %d%%.',
+                    $result->coveragePercentage(),
+                    $config->minCoverage,
+                ));
+                $failed = true;
+            }
+
+            $reporter = new GithubActionsReporter($this->output);
+
+            if ($reporter->enabled()) {
+                $reporter->report($result);
+            }
         }
 
-        $this->writeJsonReport($result, $baselineUpdated, $config->baselinePath, $output);
+        $this->writeJsonReport($result, $baselineUpdated, $config->baselinePath, $output, $failed);
 
-        if ($baselineUpdated || ! $result->failed()) {
+        if ($baselineUpdated || ! $failed) {
             return $exitCode;
         }
 
@@ -261,7 +281,7 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
         return $storedHash !== null && $storedHash !== $config->fingerprint();
     }
 
-    private function writeJsonReport(BladeCoverageResult $result, bool $baselineUpdated, string $baselinePath, BladeCoverageOutput $output): void
+    private function writeJsonReport(BladeCoverageResult $result, bool $baselineUpdated, string $baselinePath, BladeCoverageOutput $output, bool $failed): void
     {
         if ($this->jsonPath === null) {
             return;
@@ -271,7 +291,7 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
             ? Path::normalize($this->jsonPath)
             : Path::normalize($this->config()->rootPath.'/'.$this->jsonPath);
 
-        $this->jsonReport->write($path, $result, $baselineUpdated, $baselinePath);
+        $this->jsonReport->write($path, $result, $baselineUpdated, $baselinePath, $failed);
         $output->renderJsonReport($path);
     }
 
