@@ -8,21 +8,27 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final readonly class BladeCoverageOutput
 {
+    private BladeViewGrouper $grouper;
+
     public function __construct(
         private OutputInterface $output,
-    ) {}
+        string $groupBy = 'auto',
+    ) {
+        $this->grouper = new BladeViewGrouper($groupBy);
+    }
 
     public function render(BladeCoverageResult $result, bool $baselineUpdated, string $baselinePath): void
     {
         $this->output->writeln('');
         $this->output->writeln('<options=bold>Blade view coverage</>');
         $this->output->writeln(sprintf(
-            '  %d covered, %d baseline-allowed, %d new uncovered, %d changed uncovered, %d total',
+            '  %d covered, %d baseline-allowed, %d new uncovered, %d changed uncovered, %d total (%.1f%% covered)',
             count($result->covered),
             count($result->baselineAllowed),
             count($result->newUncovered),
             count($result->changedUncovered),
             count($result->targets),
+            $result->coveragePercentage(),
         ));
 
         if ($baselineUpdated) {
@@ -63,8 +69,8 @@ final readonly class BladeCoverageOutput
 
         $rendered = 0;
 
-        foreach ($this->groupTargetsByPackage($targets) as $package => $paths) {
-            $this->output->writeln(sprintf('    %s:', $package));
+        foreach ($this->grouper->group($targets) as $group => $paths) {
+            $this->output->writeln(sprintf('    %s:', $group));
 
             foreach ($paths as $path) {
                 if ($rendered >= 25) {
@@ -79,28 +85,5 @@ final readonly class BladeCoverageOutput
         if (count($targets) > $rendered) {
             $this->output->writeln(sprintf('    ... and %d more', count($targets) - $rendered));
         }
-    }
-
-    /**
-     * @param  array<string, BladeViewTarget>  $targets
-     * @return array<string, list<string>>
-     */
-    private function groupTargetsByPackage(array $targets): array
-    {
-        $groups = [];
-
-        foreach (array_keys($targets) as $path) {
-            $segments = explode('/', $path);
-            $package = count($segments) >= 2 && $segments[0] === 'packages'
-                ? $segments[1]
-                : 'other';
-
-            $groups[$package] ??= [];
-            $groups[$package][] = $path;
-        }
-
-        ksort($groups);
-
-        return $groups;
     }
 }
