@@ -9,8 +9,9 @@ use RuntimeException;
 
 final readonly class BladeCoverageJsonReport
 {
-    public function write(string $path, BladeCoverageResult $result, bool $baselineUpdated, string $baselinePath): void
+    public function write(string $path, BladeCoverageResult $result, bool $baselineUpdated, string $baselinePath, ?bool $failed = null): void
     {
+        $failed ??= $result->failed();
         $directory = dirname($path);
 
         if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
@@ -31,7 +32,8 @@ final readonly class BladeCoverageJsonReport
                     'baselineAllowed' => count($result->baselineAllowed),
                     'newUncovered' => count($result->newUncovered),
                     'changedUncovered' => count($result->changedUncovered),
-                    'failed' => $result->failed(),
+                    'coveragePercentage' => $result->coveragePercentage(),
+                    'failed' => $failed,
                 ],
                 'views' => [
                     'covered' => array_keys($result->covered),
@@ -39,7 +41,7 @@ final readonly class BladeCoverageJsonReport
                     'newUncovered' => array_keys($result->newUncovered),
                     'changedUncovered' => array_keys($result->changedUncovered),
                 ],
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
         } catch (JsonException $jsonException) {
             throw new RuntimeException(sprintf('Unable to encode Blade coverage JSON report [%s]: %s', $path, $jsonException->getMessage()), previous: $jsonException);
         }

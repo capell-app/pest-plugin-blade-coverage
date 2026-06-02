@@ -27,4 +27,19 @@ final readonly class BladeCoverageResult
     {
         return $this->newUncovered !== [] || $this->changedUncovered !== [];
     }
+
+    /**
+     * Percentage of target views that were rendered. Returns 100.0 when there
+     * are no targets so an empty view set never reports as under-covered.
+     */
+    public function coveragePercentage(): float
+    {
+        $total = count($this->targets);
+
+        if ($total === 0) {
+            return 100.0;
+        }
+
+        return round(count($this->covered) / $total * 100, 1);
+    }
 }
