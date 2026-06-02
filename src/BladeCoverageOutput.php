@@ -40,6 +40,11 @@ final readonly class BladeCoverageOutput
         $this->output->writeln(sprintf('  <fg=red>%s</>', $message));
     }
 
+    public function renderWarning(string $message): void
+    {
+        $this->output->writeln(sprintf('  <fg=yellow>%s</>', $message));
+    }
+
     public function renderJsonReport(string $path): void
     {
         $this->output->writeln(sprintf('  JSON report: %s', $path));
