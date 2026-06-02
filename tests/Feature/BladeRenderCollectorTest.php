@@ -7,8 +7,14 @@ use Capell\PestBladeCoverage\BladeCoverageRecorder;
 use Capell\PestBladeCoverage\BladeViewRenderCollector;
 use Illuminate\Container\Container;
 use Illuminate\Events\Dispatcher;
+use Illuminate\Foundation\Testing\Concerns\InteractsWithViews;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\Factory;
+
+// Older Testbench TestCase versions do not pull in InteractsWithViews, which
+// provides the $this->view() helper. Apply it explicitly so the helper exists
+// regardless of the resolved Laravel/Testbench version.
+uses(InteractsWithViews::class);
 
 beforeEach(function (): void {
     $this->bladeCoverageRoot = bladeCoverageTempRoot();
