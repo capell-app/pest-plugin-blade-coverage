@@ -28,7 +28,11 @@ If the package is not available through Packagist yet, add a VCS repository firs
 
 ## Configure
 
-Create `tests/blade-coverage.php`:
+Configuration is optional. With no `tests/blade-coverage.php` the plugin scans both
+`resources/views/**/*.blade.php` and `packages/*/resources/views/**/*.blade.php`, so it
+works out of the box on a standard application or a package-per-directory monorepo.
+
+To customise, create `tests/blade-coverage.php`:
 
 ```php
 <?php
@@ -37,11 +41,23 @@ declare(strict_types=1);
 
 return [
     'include' => [
+        'resources/views/**/*.blade.php',
         'packages/*/resources/views/**/*.blade.php',
     ],
     'exclude' => [],
     'baseline' => 'tests/BladeCoverage/baseline.json',
     'cache' => '.cache/pest-blade-coverage',
+
+    // How uncovered views are grouped in the console output:
+    // 'auto' (default) | 'package' | 'directory' | 'flat'.
+    'group_by' => 'auto',
+
+    // 'baseline' (default) ratchets against the committed baseline.
+    // 'strict' ignores the baseline and fails on ANY uncovered view.
+    'mode' => 'baseline',
+
+    // Optionally fail when the covered percentage drops below this threshold.
+    'min_coverage' => null,
 ];
 ```
 
@@ -97,6 +113,52 @@ vendor/bin/pest --blade-coverage --blade-coverage-json=coverage/blade-coverage.j
 - Existing uncovered views are allowed only while their content hash matches the baseline.
 - New uncovered views and changed uncovered views fail the run.
 - Parallel Pest runs are supported through JSON shards in the configured cache directory.
+
+## Ignoring Individual Views
+
+Add the ignore marker inside a Blade file (typically as a comment) to drop it from
+coverage entirely, without touching `exclude` globs:
+
+```blade
+{{-- blade-coverage:ignore --}}
+```
+
+Co-locating the marker keeps the decision next to the view, so it survives moves and
+renames that a path-based exclude would not.
+
+## Failure Policy
+
+- **Baseline (default):** new and changed uncovered views fail; baseline-matched
+  uncovered views are allowed.
+- **Strict (`'mode' => 'strict'`):** the baseline is ignored and *any* uncovered view
+  fails. Good for a green-field package that should keep 100% of views rendered.
+- **Minimum coverage (`'min_coverage' => 90`):** additionally fail when the covered
+  percentage drops below the threshold. Combines with either mode.
+
+## GitHub Actions Integration
+
+When the run detects GitHub Actions (`GITHUB_ACTIONS=true`) it automatically:
+
+- emits `::error` workflow-command annotations for each new/changed uncovered view, so
+  they appear inline on the pull request diff, and
+- appends a coverage summary table to `$GITHUB_STEP_SUMMARY`.
+
+No extra flags are required; it is a no-op outside of GitHub Actions.
+
+## Programmatic Use
+
+Capture the views a code path renders from within a single test, independent of the
+suite-wide run:
+
+```php
+use Capell\PestBladeCoverage\BladeCoverage;
+
+$rendered = BladeCoverage::capture(fn () => view('blog::index')->render());
+// ['packages/blog/resources/views/index.blade.php']
+
+expect(BladeCoverage::rendered('packages/blog/resources/views/index.blade.php',
+    fn () => $this->get('/blog')))->toBeTrue();
+```
 
 ## Failure Examples
 
