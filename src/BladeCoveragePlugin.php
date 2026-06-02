@@ -169,6 +169,14 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
         }
 
         $output->render($result, $baselineUpdated, $config->baselinePath);
+
+        if (! $baselineUpdated && $this->baselineConfigDrifted($config)) {
+            $output->renderWarning(sprintf(
+                'Blade coverage config changed since the baseline was generated. Re-run with %s to refresh it.',
+                self::UPDATE_BASELINE_OPTION,
+            ));
+        }
+
         $this->writeJsonReport($result, $baselineUpdated, $config->baselinePath, $output);
 
         if ($baselineUpdated || ! $result->failed()) {
@@ -244,6 +252,13 @@ final class BladeCoveragePlugin implements AddsOutput, Bootable, HandlesArgument
     private function config(): BladeCoverageConfig
     {
         return $this->cachedConfig ??= $this->configLoader->load($this->configPath);
+    }
+
+    private function baselineConfigDrifted(BladeCoverageConfig $config): bool
+    {
+        $storedHash = $this->baseline->loadConfigHash($config->baselinePath);
+
+        return $storedHash !== null && $storedHash !== $config->fingerprint();
     }
 
     private function writeJsonReport(BladeCoverageResult $result, bool $baselineUpdated, string $baselinePath, BladeCoverageOutput $output): void

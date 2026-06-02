@@ -28,10 +28,18 @@ final readonly class BladeCoverageConfig
         $include = self::stringList($config['include'] ?? ['packages/*/resources/views/**/*.blade.php']);
         $exclude = self::stringList($config['exclude'] ?? []);
 
-        $baselinePath = self::resolvePath($rootPath, self::stringValue($config['baseline'] ?? $config['baseline_path'] ?? 'tests/BladeCoverage/baseline.json'));
-        $cachePath = self::resolvePath($rootPath, self::stringValue($config['cache'] ?? $config['cache_path'] ?? '.cache/pest-blade-coverage'));
+        $baselinePath = self::resolvePath($rootPath, self::stringValue($config['baseline'] ?? $config['baseline_path'] ?? null, 'tests/BladeCoverage/baseline.json'));
+        $cachePath = self::resolvePath($rootPath, self::stringValue($config['cache'] ?? $config['cache_path'] ?? null, '.cache/pest-blade-coverage'));
 
         return new self($rootPath, $include, $exclude, $baselinePath, $cachePath);
+    }
+
+    public function fingerprint(): string
+    {
+        return hash('sha256', (string) json_encode([
+            'include' => $this->include,
+            'exclude' => $this->exclude,
+        ], JSON_THROW_ON_ERROR));
     }
 
     private static function resolvePath(string $rootPath, string $path): string
@@ -55,8 +63,8 @@ final readonly class BladeCoverageConfig
         return array_values(array_filter($value, is_string(...)));
     }
 
-    private static function stringValue(mixed $value): string
+    private static function stringValue(mixed $value, string $default): string
     {
-        return is_string($value) && $value !== '' ? $value : '';
+        return is_string($value) && $value !== '' ? $value : $default;
     }
 }

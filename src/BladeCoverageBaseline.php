@@ -14,29 +14,15 @@ final class BladeCoverageBaseline
      */
     public function load(string $path): array
     {
-        if (! is_file($path)) {
+        $decoded = $this->decode($path);
+
+        if ($decoded === null) {
             return [];
         }
 
-        $contents = file_get_contents($path);
-
-        if ($contents === false || trim($contents) === '') {
-            return [];
-        }
-
-        try {
-            $decoded = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException $jsonException) {
-            throw new RuntimeException(sprintf('Unable to decode Blade coverage baseline [%s]: %s', $path, $jsonException->getMessage()), previous: $jsonException);
-        }
-
-        $views = is_array($decoded) && isset($decoded['views']) && is_array($decoded['views'])
+        $views = isset($decoded['views']) && is_array($decoded['views'])
             ? $decoded['views']
             : $decoded;
-
-        if (! is_array($views)) {
-            return [];
-        }
 
         $baseline = [];
 
@@ -49,6 +35,24 @@ final class BladeCoverageBaseline
         ksort($baseline);
 
         return $baseline;
+    }
+
+    /**
+     * Returns the config fingerprint stored in the baseline, if present.
+     *
+     * Used to detect when the include/exclude configuration has changed since
+     * the baseline was generated. Older path-to-hash baselines return null.
+     */
+    public function loadConfigHash(string $path): ?string
+    {
+        $decoded = $this->decode($path);
+        $config = $decoded['config'] ?? null;
+
+        if (! is_array($config)) {
+            return null;
+        }
+
+        return isset($config['hash']) && is_string($config['hash']) ? $config['hash'] : null;
     }
 
     /**
@@ -91,10 +95,7 @@ final class BladeCoverageBaseline
             $payload['config'] = [
                 'include' => $config->include,
                 'exclude' => $config->exclude,
-                'hash' => hash('sha256', json_encode([
-                    'include' => $config->include,
-                    'exclude' => $config->exclude,
-                ], JSON_THROW_ON_ERROR)),
+                'hash' => $config->fingerprint(),
             ];
         }
 
@@ -103,5 +104,29 @@ final class BladeCoverageBaseline
         if (file_put_contents($path, $json.PHP_EOL) === false) {
             throw new RuntimeException(sprintf('Unable to write Blade coverage baseline [%s].', $path));
         }
+    }
+
+    /**
+     * @return array<mixed>|null
+     */
+    private function decode(string $path): ?array
+    {
+        if (! is_file($path)) {
+            return null;
+        }
+
+        $contents = file_get_contents($path);
+
+        if ($contents === false || trim($contents) === '') {
+            return null;
+        }
+
+        try {
+            $decoded = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $jsonException) {
+            throw new RuntimeException(sprintf('Unable to decode Blade coverage baseline [%s]: %s', $path, $jsonException->getMessage()), previous: $jsonException);
+        }
+
+        return is_array($decoded) ? $decoded : null;
     }
 }

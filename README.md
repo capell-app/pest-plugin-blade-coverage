@@ -129,7 +129,9 @@ view through Laravel, or by deleting the Blade file if it is genuinely unused.
 ## Baseline Format
 
 The baseline stores uncovered views by normalized path and content hash. It also stores
-metadata that helps catch accidental config drift:
+the include/exclude fingerprint so the run can warn when the configuration has changed
+since the baseline was generated (re-run with `--blade-coverage-update-baseline` to
+refresh it). The warning is informational and does not change the exit code:
 
 ```json
 {

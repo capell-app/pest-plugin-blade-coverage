@@ -49,6 +49,60 @@ it('discovers package blade targets with hashes while respecting excludes', func
     }
 });
 
+it('falls back to default baseline and cache paths for empty or invalid values', function (): void {
+    $root = '/srv/app';
+
+    $empty = BladeCoverageConfig::fromArray(['baseline' => '', 'cache' => ''], $root);
+    $invalid = BladeCoverageConfig::fromArray(['baseline' => ['x'], 'cache' => 123], $root);
+    $custom = BladeCoverageConfig::fromArray(['baseline' => 'custom/baseline.json'], $root);
+
+    expect($empty->baselinePath)->toBe('/srv/app/tests/BladeCoverage/baseline.json')
+        ->and($empty->cachePath)->toBe('/srv/app/.cache/pest-blade-coverage')
+        ->and($invalid->baselinePath)->toBe('/srv/app/tests/BladeCoverage/baseline.json')
+        ->and($invalid->cachePath)->toBe('/srv/app/.cache/pest-blade-coverage')
+        ->and($custom->baselinePath)->toBe('/srv/app/custom/baseline.json');
+});
+
+it('fingerprints include and exclude config and reads it back from the baseline', function (): void {
+    $root = bladeCoverageTempRoot();
+
+    try {
+        $path = $root.'/tests/BladeCoverage/baseline.json';
+        $config = BladeCoverageConfig::fromArray([
+            'include' => ['packages/*/resources/views/**/*.blade.php'],
+            'exclude' => ['packages/demo/resources/views/ignored.blade.php'],
+        ], $root);
+        $changedConfig = BladeCoverageConfig::fromArray([
+            'include' => ['packages/*/resources/views/**/*.blade.php'],
+            'exclude' => [],
+        ], $root);
+
+        (new BladeCoverageBaseline)->write($path, [], null, $config);
+
+        $storedHash = (new BladeCoverageBaseline)->loadConfigHash($path);
+
+        expect($storedHash)->toBe($config->fingerprint())
+            ->and($storedHash)->not->toBe($changedConfig->fingerprint());
+    } finally {
+        bladeCoverageDeleteDirectory($root);
+    }
+});
+
+it('returns no config fingerprint for legacy path-to-hash baselines', function (): void {
+    $root = bladeCoverageTempRoot();
+
+    try {
+        $path = $root.'/baseline.json';
+        file_put_contents($path, json_encode(['packages/blog/resources/views/index.blade.php' => 'hash']));
+
+        expect((new BladeCoverageBaseline)->loadConfigHash($path))->toBeNull()
+            ->and(array_keys((new BladeCoverageBaseline)->load($path)))
+            ->toBe(['packages/blog/resources/views/index.blade.php']);
+    } finally {
+        bladeCoverageDeleteDirectory($root);
+    }
+});
+
 it('evaluates new changed and baseline-allowed uncovered views', function (): void {
     $targets = [
         'covered.blade.php' => new BladeViewTarget('covered.blade.php', 'covered-hash'),
