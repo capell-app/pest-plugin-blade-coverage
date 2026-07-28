@@ -11,12 +11,12 @@
     ],
     "require": {
         "php": "^8.3",
-        "pestphp/pest-plugin": "^3.0|^4.0"
+        "pestphp/pest-plugin": "^3.0|^4.0|^5.0"
     },
     "require-dev": {
         "orchestra/testbench": "^9.0|^10.0|^11.0",
-        "pestphp/pest": "^3.0|^4.1",
-        "pestphp/pest-plugin-laravel": "^3.0|^4.0",
+        "pestphp/pest": "^5.0",
+        "pestphp/pest-plugin-laravel": "^5.0",
         "laravel/pint": "^1.25"
     },
     "autoload": {
@@ -38,7 +38,8 @@
     },
     "scripts": {
         "lint": "pint",
-        "test": "pest --colors=always"
+        "test": "pest --colors=always",
+        "test:tia": "pest --colors=always --tia"
     },
     "config": {
         "sort-packages": true,
