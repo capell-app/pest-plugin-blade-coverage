@@ -28,6 +28,10 @@ jobs:
           php-version: ${{ matrix.php }}
           coverage: none
 
+      - name: Select PHP-compatible Pest test tooling
+        if: matrix.php == '8.3'
+        run: composer require --dev --no-update pestphp/pest:^4.1 pestphp/pest-plugin-laravel:^4.0
+
       - name: Install dependencies
         run: composer update --${{ matrix.dependency-version }} --no-interaction --no-progress --prefer-dist
 
